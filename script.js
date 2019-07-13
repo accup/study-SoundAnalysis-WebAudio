@@ -16,29 +16,43 @@ class App {
 		/** 波形データ取得用バッファ
 		 * @type {number[]} */
 		this.waveBuffer = null;
-		/** 波形表示キャンバス
-		 * @type {HTMLCanvasElement} */
-		this.cvsWave = document.getElementById('cvs-wave');
-		/** 波形グラフ
-		 * @type {WaveGraph} */
-		this.waveGraph = new WaveGraph(this.cvsWave);
+		/** 波形グラフ */
+		this.waveGraph = new WaveGraph(
+			document.getElementById('cvs-wave'));
+		/** 波形グラフ目盛り */
+		this.waveTick = new TickGraph(
+			document.getElementById('cvs-wave-tick'));
 		
 		/** FFTデータ取得用バッファ
 		 * @type {number[]} */
 		this.freqBuffer = null;
-		/** FFT表示キャンバス
-		 * @type {HTMLCanvasElement} */
-		this.cvsFrequency = document.getElementById('cvs-frequency');
-		/** FFTグラフ
-		 * @type {SpectrogramGraph} */
-		this.freqGraph = new SpectrogramGraph(this.cvsFrequency, 256);
+		/** FFTグラフ */
+		this.freqGraph = new SpectrogramGraph(
+			document.getElementById('cvs-frequency'), 256);
+		/** FFTグラフ目盛り */
+		this.freqTick = new TickGraph(
+			document.getElementById('cvs-frequency-tick'));
 		
 		// 初期設定
-		// FFTサイズ
+		// グラフ設定
+		this.changeWaveScale(1.0);
 		this.changeFFTSize(256);
 		// グラフ描画用のコンバータの設定
 		let customAlphaConverter = value => Math.max(0, value - this.analyser.minDecibels) / (this.analyser.maxDecibels - this.analyser.minDecibels);
 		this.freqGraph.alphaConverter = customAlphaConverter;
+	}
+	
+	changeWaveScale(waveScale) {
+		waveScale = Math.max(1e-4, waveScale);
+		
+		// スケールの変更
+		this.waveGraph.scale = waveScale;
+		
+		// 目盛りの描画
+		this.waveTick.renderTicks(
+			[0, 3, 6],
+			[(1.0 / waveScale).toPrecision(2), 0.0, (-1.0 / waveScale).toPrecision(2)],
+			7);
 	}
 	
 	changeFFTSize(fftSize) {
@@ -46,6 +60,16 @@ class App {
 		
 		this.waveBuffer = new Float32Array(this.analyser.fftSize);
 		this.freqBuffer = new Float32Array(this.analyser.frequencyBinCount);
+		
+		let numDivision = 32;
+		let indices = [];
+		let labels = [];
+		
+		for (let i=0; i<32; i+=4) {
+			indices.push(32 - i - 1);
+			labels.push((i * fftSize / 32).toString());
+		}
+		this.freqTick.renderTicks(indices, labels, numDivision);
 	}
 	
 	changeSourceNode(sourceNode) {
@@ -109,7 +133,7 @@ window.addEventListener('load', e => {
 		value = Math.max(1e-4, value);
 		
 		inputWaveScale.value = value.toString();
-		app.waveGraph.scale = value;
+		app.changeWaveScale(value);
 	});
 	
 	// FFTサイズの設定

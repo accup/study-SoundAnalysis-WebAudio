@@ -26,6 +26,23 @@ let AlphaConverters = {
 };
 
 
+let AlignmentAnchorSelector = {
+	start:  (left, right) => left,
+	end:    (left, right) => right,
+	left:   (left, right) => left,
+	right:  (left, right) => right,
+	center: (left, right) => 0.5 * (left + right)
+};
+
+let BaselineAnchorSelector = {
+	top:    (top, bottom) => top,
+	hanging:(top, bottom) => 0.8 * top + 0.2 * bottom,
+	middle: (top, bottom) => 0.5 * (top + bottom),
+	alphabetic: (top, bottom) => 0.35 * top + 0.65 * bottom,
+	ideographic:(top, bottom) => 0.2 * top + 0.8 * bottom,
+	bottom: (top, bottom) => bottom
+};
+
 
 class GraphBase {
 	/**
@@ -191,5 +208,70 @@ class SpectrogramGraph extends TimeDomainGraph {
 		this.context.fillRect(right, 0, 1, cHeight);
 		
 		this.proceedFrame();
+	}
+}
+
+
+class TickGraph extends GraphBase {
+	/**
+	 * @param {HTMLCanvasElement} htmlCanvasElement 
+	 */
+	constructor(htmlCanvasElement) {
+		super(htmlCanvasElement);
+		
+		/** 文字色
+		 * @type {string | CanvasGradient | CanvasPattern}
+		 */
+		this.fg_color = 'black';
+		
+		/** フォント
+		 * @type {string}
+		 */
+		this.font = '16px sans-serif';
+		
+		/** 水平の揃え方
+		 * @type {CanvasTextAlign}
+		 */
+		this.alignment = 'right'
+		
+		/** 垂直の揃え方
+		 * @type {CanvasTextBaseline}
+		 */
+		this.baseline = 'middle';
+	}
+	
+	/** 縦にラベルを描画する
+	 * @param {number[]} indices 上から0から始めて何番目かを並べた配列
+	 * @param {string[]} labels ラベルの配列
+	 * @param {number} numDivision 軸の分割数
+	 */
+	renderTicks(indices, labels, numDivision) {
+		const cWidth = this.canvas.width;
+		const cHeight = this.canvas.height;
+		
+		const lenIndices = indices.length;
+		
+		// クリア
+		this.context.clearRect(0, 0, cWidth, cHeight);
+		
+		// 描画スタイル
+		this.context.fillStyle = this.fg_color;
+		this.context.globalAlpha = 1.0;
+		this.context.font = this.font;
+		this.context.textAlign = this.alignment;
+		this.context.textBaseline = this.baseline;
+		
+		const alignAnchorSelector = AlignmentAnchorSelector[this.alignment];
+		const baseAnchorSelector = BaselineAnchorSelector[this.baseline];
+		
+		let alignAnchor = alignAnchorSelector(0, cWidth);
+		
+		for (let i=0; i<lenIndices; ++i) {
+			let index = indices[i];
+			let top = index * cHeight / numDivision;
+			let bottom = (index + 1) * cHeight / numDivision;
+			
+			this.context.fillText(labels[i], alignAnchor, baseAnchorSelector(top, bottom));
+		}
 	}
 }
