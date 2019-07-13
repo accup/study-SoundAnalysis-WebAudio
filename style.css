@@ -1,7 +1,98 @@
-canvas#cvs-wave {
-	background-color: black;
+@import url('https://fonts.googleapis.com/css?family=Ubuntu:700&display=swap');
+
+
+body {
+	margin: 0;
 }
 
-canvas#cvs-frequency {
+section.section-output {
+	background-color: #CC99FF;
+	
+	margin: 2px 0;
+	padding: 0.5em;
+	
+	font-size: 1.2em;
+	
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+}
+
+section.section-sticky {
+	position: -x-sticky;
+	position: -webkit-sticky;
+	position: sticky;
+	
+	top: 2px;
+	border-bottom: 2px solid white;
+}
+
+section.section-output .output-config {
+	flex: 1 1 8em;
+	
+	margin-right: 0.5em;
+	
+	font-family: 'Ubuntu', sans-serif;
+}
+
+section.section-output .output-config .section-heading {
+	font-size: 1.5em;
+	margin-left: initial;
+}
+
+section.section-output .output-config div {
+	margin-left: 1em;
+	margin-top: 2px;
+	margin-bottom: 2px;
+}
+
+section.section-output .output-config label {
+	color: #3D1466;
+}
+
+section.section-output .output-config input,
+section.section-output .output-config button,
+section.section-output .output-config select {
+	margin-left: 0.5em;
+	
+	font-size: inherit;
+	font-family: inherit;
+	
+	border: none;
+	background-color: #E6CCFF;
+}
+
+section.section-output .output-config button.remarkable {
+	background-color: #FFFF87;
+}
+
+
+section.section-output .output-config input {
+	width: 4em;
+}
+
+section.section-output .output-config button {
+	margin-left: 0.5em;
+	color: #3D1466;
+	
+	border-radius: 6px;
+}
+
+section.section-output output {
+	flex: 1 0 auto;
+		
+	display: flex;
+	flex-direction: row;
+}
+
+section.section-output output div {
+	flex: 0 0 auto;
+}
+
+canvas.canvas-tick {
+	background-color: white;
+}
+
+canvas.canvas-graph {
 	background-color: black;
 }
