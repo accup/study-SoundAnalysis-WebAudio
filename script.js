@@ -164,7 +164,7 @@ window.addEventListener('load', e => {
 	});
 	
 	// メディアデバイス
-	navigator.mediaDevices.getUserMedia({
+	(navigator.mediaDevices || navigator).getUserMedia({
 		audio: true,
 		video: false
 	}).then(audioStream => {
