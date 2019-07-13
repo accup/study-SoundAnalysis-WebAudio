@@ -2,7 +2,7 @@ class App {
 	constructor() {
 		/** オーディオコンテキスト
 		 * @type {AudioContext} */
-		this.audioContext = new (AudioContext || webkitAudioContext)();
+		this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
 		/** アナライザ */
 		this.analyser = this.audioContext.createAnalyser();
 		
