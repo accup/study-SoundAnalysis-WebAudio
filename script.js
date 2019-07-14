@@ -61,13 +61,13 @@ class App {
 		this.waveBuffer = new Float32Array(this.analyser.fftSize);
 		this.freqBuffer = new Float32Array(this.analyser.frequencyBinCount);
 		
-		let numDivision = 32;
+		const numDivision = 32;
 		let indices = [];
 		let labels = [];
 		
-		for (let i=0; i<32; i+=4) {
-			indices.push(32 - i - 1);
-			labels.push((i * fftSize / 32).toString());
+		for (let i=0; i<numDivision; i+=4) {
+			indices.push(numDivision - i - 1);
+			labels.push((i * fftSize / (2 * numDivision)).toString());
 		}
 		this.freqTick.renderTicks(indices, labels, numDivision);
 	}
