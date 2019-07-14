@@ -5,6 +5,17 @@ class App {
 		this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
 		/** アナライザ */
 		this.analyser = this.audioContext.createAnalyser();
+		/** AnalyserNode.getFloatTimeDomainData が iOS Safari で動かないので苦肉の策 */
+		this.getFloatTimeDomainData = (
+			'getFloatTimeDomainData' in this.analyser
+			? floatBuffer => this.analyser.getFloatTimeDomainData(floatBuffer)
+			: floatBuffer => {
+				this.analyser.getByteTimeDomainData(this.waveByteBuffer);
+				for (let i=0, n=floatBuffer.length; i<n; ++i) {
+					floatBuffer[i] = this.waveByteBuffer[i] / 128.0 - 1.0;
+				}
+			});
+		
 		
 		/** ソース音源ノード
 		 * @type {AudioNode} */
@@ -14,8 +25,11 @@ class App {
 		this.analyzing = false;
 		
 		/** 波形データ取得用バッファ
-		 * @type {number[]} */
+		 * @type {Float32Array} */
 		this.waveBuffer = null;
+		/** 波形データ取得用サブバッファ
+		 * @type {Uint8Array} */
+		this.waveByteBuffer = null;
 		/** 波形グラフ */
 		this.waveGraph = new WaveGraph(
 			document.getElementById('cvs-wave'));
@@ -24,7 +38,7 @@ class App {
 			document.getElementById('cvs-wave-tick'));
 		
 		/** FFTデータ取得用バッファ
-		 * @type {number[]} */
+		 * @type {Float32Array} */
 		this.freqBuffer = null;
 		/** FFTグラフ */
 		this.freqGraph = new SpectrogramGraph(
@@ -59,6 +73,10 @@ class App {
 		this.analyser.fftSize = fftSize;
 		
 		this.waveBuffer = new Float32Array(this.analyser.fftSize);
+		/** iOS Safari の悲しいお知らせ
+		 *      getFloatTimeDomainData が無いらしい
+		 */
+		this.waveByteBuffer = new Uint8Array(this.analyser.fftSize);
 		this.freqBuffer = new Float32Array(this.analyser.frequencyBinCount);
 		
 		const numDivision = 32;
@@ -85,7 +103,7 @@ class App {
 			requestAnimationFrame(this.callback_renderAnalyzedData.bind(this));
 		}
 		
-		this.analyser.getFloatTimeDomainData(this.waveBuffer);
+		this.getFloatTimeDomainData(this.waveBuffer);
 		this.analyser.getFloatFrequencyData(this.freqBuffer);
 		
 		this.waveGraph.renderNextFrame(this.waveBuffer);
