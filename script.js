@@ -175,7 +175,7 @@ window.addEventListener('load', e => {
 		btnStartStop.addEventListener('click', e => {
 			if (!app.analyzing) {
 				app.startAnalyzing();
-				btnStartStop.textContent = 'Stop';
+				btnStartStop.textContent = 'Analyzing...';
 			} else {
 				app.stopAnalyzing();
 				btnStartStop.textContent = 'Start';
