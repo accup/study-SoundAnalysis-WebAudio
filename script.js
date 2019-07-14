@@ -2,7 +2,7 @@ class App {
 	constructor() {
 		/** オーディオコンテキスト
 		 * @type {AudioContext} */
-		this.audioContext = new (AudioContext || webkitAudioContext)();
+		this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
 		/** アナライザ */
 		this.analyser = this.audioContext.createAnalyser();
 		
@@ -164,7 +164,7 @@ window.addEventListener('load', e => {
 	});
 	
 	// メディアデバイス
-	navigator.mediaDevices.getUserMedia({
+	(navigator.mediaDevices || navigator).getUserMedia({
 		audio: true,
 		video: false
 	}).then(audioStream => {
