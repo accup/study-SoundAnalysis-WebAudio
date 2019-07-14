@@ -111,3 +111,11 @@ window.addEventListener('load', e => {
 	sadConsole.changeConsoleElement(document.getElementById('section-console'));
 	window.console = sadConsole;
 });
+
+window.addEventListener('error', e => {
+	window.console.error(
+		`${e.message
+		} (${e.filename.substring(e.filename.indexOf('/') + 1)
+		} at ${e.lineno}:${e.colno})`
+	);
+});
