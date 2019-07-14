@@ -3,6 +3,8 @@ class App {
 		/** オーディオコンテキスト
 		 * @type {AudioContext} */
 		this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+		/** サンプリング周波数（多分プロパティ未対応のブラウザは 44100 Hz 固定） */
+		this.sampleRate = this.audioContext.sampleRate || 44100;
 		/** アナライザ */
 		this.analyser = this.audioContext.createAnalyser();
 		/** AnalyserNode.getFloatTimeDomainData が iOS Safari で動かないので苦肉の策 */
@@ -15,7 +17,26 @@ class App {
 					floatBuffer[i] = this.waveByteBuffer[i] / 128.0 - 1.0;
 				}
 			});
+		/** 波形データ取得用サブバッファ
+		 * @type {Uint8Array} */
+		this.waveByteBuffer = null;
 		
+		/** 波形データ用バッファ
+		 * @type {Float32Array} */
+		this.waveBuffer = null;
+		
+		/** スペクトラム用バッファ
+		 * @type {Float32Array} */
+		this.spectrumBuffer = null;
+		
+		/** 波形拡大率 */
+		this.loudness = 1.0;
+		
+		/** 解析コールバック
+		 * @type {AnalysisCallback[]}
+		 */
+		this.analysisCallbacks = [];
+				
 		
 		/** ソース音源ノード
 		 * @type {AudioNode} */
@@ -24,70 +45,20 @@ class App {
 		/** 分析処理を実行中か */
 		this.analyzing = false;
 		
-		/** 波形データ取得用バッファ
-		 * @type {Float32Array} */
-		this.waveBuffer = null;
-		/** 波形データ取得用サブバッファ
-		 * @type {Uint8Array} */
-		this.waveByteBuffer = null;
-		/** 波形グラフ */
-		this.waveGraph = new WaveGraph(
-			document.getElementById('cvs-wave'));
-		/** 波形グラフ目盛り */
-		this.waveTick = new TickGraph(
-			document.getElementById('cvs-wave-tick'));
-		
-		/** FFTデータ取得用バッファ
-		 * @type {Float32Array} */
-		this.freqBuffer = null;
-		/** FFTグラフ */
-		this.freqGraph = new SpectrogramGraph(
-			document.getElementById('cvs-frequency'), 256);
-		/** FFTグラフ目盛り */
-		this.freqTick = new TickGraph(
-			document.getElementById('cvs-frequency-tick'));
-		
 		// 初期設定
-		// グラフ設定
-		this.changeWaveScale(1.0);
-		this.changeFFTSize(256);
-		// グラフ描画用のコンバータの設定
-		let customAlphaConverter = value => Math.max(0, value - this.analyser.minDecibels) / (this.analyser.maxDecibels - this.analyser.minDecibels);
-		this.freqGraph.alphaConverter = customAlphaConverter;
-	}
-	
-	changeWaveScale(waveScale) {
-		waveScale = Math.max(1e-4, waveScale);
-		
-		// スケールの変更
-		this.waveGraph.scale = waveScale;
-		
-		// 目盛りの描画
-		this.waveTick.renderTicks(
-			[0, 3, 6],
-			[(1.0 / waveScale).toPrecision(2), 0.0, (-1.0 / waveScale).toPrecision(2)],
-			7);
+		this.changeFFTSize(2048);
 	}
 	
 	changeFFTSize(fftSize) {
 		this.analyser.fftSize = fftSize;
 		
 		this.waveBuffer = new Float32Array(this.analyser.fftSize);
-		/** iOS Safari の悲しいお知らせ
-		 *      getFloatTimeDomainData が無いらしい
-		 */
 		this.waveByteBuffer = new Uint8Array(this.analyser.fftSize);
-		this.freqBuffer = new Float32Array(this.analyser.frequencyBinCount);
-		
-		const numDivision = 32;
-		let indices = [];
-		let labels = [];
-		
-		for (let i=0; i<numDivision; i+=4) {
-			indices.push(numDivision - i - 1);
-			labels.push((i * fftSize / (2 * numDivision)).toString());
-		}
-		this.freqTick.renderTicks(indices, labels, numDivision);
+		this.spectrumBuffer = new Float32Array(this.analyser.frequencyBinCount);
+	}
+	
+	changeLoudness(loudness) {
+		this.loudness = loudness;
 	}
 	
 	changeSourceNode(sourceNode) {
@@ -97,18 +68,6 @@ class App {
 		this.sourceNode = sourceNode;
 	}
 	
-	
-	callback_renderAnalyzedData() {
-		if (this.analyzing) {
-			requestAnimationFrame(this.callback_renderAnalyzedData.bind(this));
-		}
-		
-		this.getFloatTimeDomainData(this.waveBuffer);
-		this.analyser.getFloatFrequencyData(this.freqBuffer);
-		
-		this.waveGraph.renderNextFrame(this.waveBuffer);
-		this.freqGraph.renderNextFrame(this.freqBuffer);
-	}
 	
 	startAnalyzing() {
 		if (this.analyzing) return;
@@ -128,6 +87,29 @@ class App {
 		this.sourceNode.disconnect();
 		this.analyzing = false;
 	}
+	
+	
+	callback_renderAnalyzedData() {
+		if (this.analyzing) {
+			requestAnimationFrame(this.callback_renderAnalyzedData.bind(this));
+		}
+		
+		this.getFloatTimeDomainData(this.waveBuffer);
+		// loudness に従って拡大
+		for (let i=0, n=this.waveBuffer.length; i<n; ++i) {
+			this.waveBuffer[i] *= this.loudness;
+		}
+		this.analyser.getFloatFrequencyData(this.spectrumBuffer);
+		// loudness に従ってデシベルの下駄をはかせる
+		const decibelBias = 10 * Math.log10(this.loudness);
+		for (let i=0, n=this.spectrumBuffer.length; i<n; ++i) {
+			this.spectrumBuffer[i] += decibelBias;
+		}
+		
+		for (let i=0, n=this.analysisCallbacks.length; i<n; ++i) {
+			this.analysisCallbacks[i].renderAnalyzedData();
+		}
+	}
 }
 
 
@@ -137,49 +119,222 @@ var app = null;
 window.addEventListener('load', e => {
 	app = new App();
 	
-	/** @type {HTMLButtonElement} */
-	let btnStartStop = document.getElementById('button-start-stop');
-	/** @type {HTMLInputElement} */
-	let inputWaveScale = document.getElementById('input-wavescale');
-	/** @type {HTMLSelectElement} */
-	let selectFFTSize = document.getElementById('select-fftsize');
+	// 分析処理群
+	let waveAnalysis = new class {
+		constructor() {
+			/** 波形グラフ */
+			this.waveGraph = new WaveGraph(
+				document.getElementById('cvs-wave'));
+			this.waveTick = new TickGraph(
+				document.getElementById('cvs-wave-tick'));
+				
+			this.changeWaveScale(1.0);
+		}
+		
+		changeWaveScale(waveScale) {
+			waveScale = Math.max(1e-4, waveScale);
+			
+			// スケールの変更
+			this.waveGraph.scale = waveScale;
+			
+			// 目盛りの描画
+			this.waveTick.renderTicks(
+				[0, 3, 6],
+				[(1.0 / waveScale).toPrecision(2), 0.0, (-1.0 / waveScale).toPrecision(2)],
+				7);
+		}
+		
+		renderAnalyzedData() {
+			this.waveGraph.renderNextFrame(app.waveBuffer);
+		}
+	}();
+	app.analysisCallbacks.push(waveAnalysis);
 	
-	// 波形データの表示スケール
-	inputWaveScale.value = app.waveGraph.scale.toString(10);
-	inputWaveScale.addEventListener('input', e => {
-		let value = parseFloat(inputWaveScale.value);
-		value = Math.max(1e-4, value);
+	let spectrumAnalysis = new class {
+		constructor() {
+			/** FFTグラフ */
+			this.freqGraph = new SpectrogramGraph(
+				document.getElementById('cvs-frequency'), 256);
+			this.freqTick = new TickGraph(
+				document.getElementById('cvs-frequency-tick'));
+			
+			// グラフ描画用のコンバータの設定
+			let customAlphaConverter = value => Math.max(0, value - app.analyser.minDecibels) / (app.analyser.maxDecibels - app.analyser.minDecibels);
+			this.freqGraph.alphaConverter = customAlphaConverter;
+			
+			this.changeFFTSize(256);
+		}
 		
-		inputWaveScale.value = value.toString();
-		app.changeWaveScale(value);
-	});
+		changeFFTSize(fftSize) {
+			const numDivision = 32;
+			let indices = [];
+			let labels = [];
+			
+			for (let i=0; i<numDivision; i+=4) {
+				indices.push(numDivision - i - 1);
+				labels.push((i * app.sampleRate / (2 * numDivision)).toString());
+			}
+			this.freqTick.renderTicks(indices, labels, numDivision);
+		}
+		
+		renderAnalyzedData() {
+			this.freqGraph.renderNextFrame(app.spectrumBuffer);
+		}
+	}();
+	app.analysisCallbacks.push(spectrumAnalysis);	
 	
-	// FFTサイズの設定
-	const minLog2FFTSize = 5;
-	const maxLog2FFTSize = 15;
-	for (let i=minLog2FFTSize; i<=maxLog2FFTSize; ++i) {
-		let fftSize = 2 ** i;
+	class ChromaAnalysis {
+		constructor(computeChroma, cvsGraphId, cvsTickId) {
+			/** @type {Float32Array} */
+			this.chromaBuffer = null;
+			
+			this.computeChroma = computeChroma;
+			
+			this.chromaGraph = new SpectrogramGraph(
+				document.getElementById(cvsGraphId), 256);
+			this.chromaTick = new TickGraph(
+				document.getElementById(cvsTickId));
+			
+			const numDivision = 12;
+			const indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+			const labels = ['B', 'A#', 'A', 'G#', 'G', 'F#', 'F', 'E', 'D#', 'D', 'C#', 'C'];
+			this.chromaTick.renderTicks(indices, labels, numDivision);
+			
+			this.changeNumChroma(12);
+		}
 		
-		let optionNode = document.createElement('option');
-		optionNode.value = fftSize.toString();
-		optionNode.textContent = fftSize.toString();
-		selectFFTSize.appendChild(optionNode);
+		changeNumChroma(numChroma) {
+			numChroma = Math.max(1, Math.floor(numChroma));
+			
+			this.chromaBuffer = new Float32Array(numChroma);
+		}
 		
-		if (app.analyser.fftSize == fftSize) {
-			selectFFTSize.selectedIndex = i - minLog2FFTSize;
+		renderAnalyzedData() {
+			this.computeChroma(this.chromaBuffer, app.spectrumBuffer, app.sampleRate, 440 * (2 ** (3 / 12)))
+			
+			this.chromaGraph.renderNextFrame(this.chromaBuffer);
 		}
 	}
 	
-	selectFFTSize.addEventListener('input', e => {
-		let fftSize = parseInt(selectFFTSize.value);
-		
-		if (fftSize != (fftSize & -fftSize)) {
-			fftSize = 2 ** minLog2FFTSize;
+	app.analysisCallbacks.push(new ChromaAnalysis(
+		computeChroma1, 'cvs-chroma1', 'cvs-chroma1-tick'));
+	app.analysisCallbacks.push(new ChromaAnalysis(
+		computeChroma2, 'cvs-chroma2', 'cvs-chroma2-tick'));
+	app.analysisCallbacks.push(new ChromaAnalysis(
+		computeChroma3, 'cvs-chroma3', 'cvs-chroma3-tick'));	
+	
+	// カラーマップとフォントの設定
+	const colorBar = new SectionColorBar([
+		[ 0.0,   0,   0,   0],
+		[1e-2,   0,   0, 255],
+		[ 1.0,   0, 255,   0]
+	]);
+	const font = '16px Ubuntu, sans-serif';
+	spectrumAnalysis.freqGraph.fg_color = colorBar;
+	waveAnalysis.waveTick.changeFont(font);
+	spectrumAnalysis.freqTick.changeFont(font);
+	
+	// Chroma Analyses
+	for (let i=0; i<app.analysisCallbacks.length; ++i) {
+		let analysis = app.analysisCallbacks[i];
+		if (analysis instanceof ChromaAnalysis) {
+			analysis.chromaGraph.fg_color = colorBar;
+			analysis.chromaTick.changeFont(font);
 		}
-		selectFFTSize.value = fftSize.toString();
-		
-		app.changeFFTSize(fftSize);
+	}
+	
+	
+	// 時間軸表示フレーム数
+	const vmNumFrames = new Vue({
+		el: '#input-numframes',
+		data: {
+			numFrames: spectrumAnalysis.freqGraph.numFrames
+		},
+		watch: {
+			numFrames() {
+				let numFrames = Math.max(10, Math.min(Math.round(this.numFrames), 10000));
+				this.numFrames = numFrames;
+				
+				spectrumAnalysis.freqGraph.changeNumFrames(numFrames);
+				
+				// Chroma Analyses
+				for (let i=0; i<app.analysisCallbacks.length; ++i) {
+					let analysis = app.analysisCallbacks[i];
+					if (analysis instanceof ChromaAnalysis) {
+						analysis.chromaGraph.changeNumFrames(numFrames);
+					}
+				}
+			}
+		}
 	});
+	
+	// サンプリング周波数
+	const vmSampleRate = new Vue({
+		el: '#output-samplerate',
+		data: {
+			sampleRate: app.sampleRate
+		}
+	});
+	
+	// 出力スケーリング
+	const vmLoudness = new Vue({
+		el: '#input-loudness',
+		data: {
+			loudness: 1.0
+		},
+		watch: {
+			loudness() {
+				let loudness = Math.max(0.0001, this.loudness);
+				this.loudness = loudness;
+				app.changeLoudness(loudness);
+			}
+		}
+	});
+	
+	
+	// 波形データの表示スケール
+	const vmWaveScale = new Vue({
+		el: '#input-wavescale',
+		data: {
+			waveScale: waveAnalysis.waveGraph.scale
+		},
+		watch: {
+			waveScale() {
+				let value = parseFloat(this.waveScale);
+				
+				this.waveScale = value;
+				waveAnalysis.changeWaveScale(value);
+			}
+		}
+	});
+		
+	// FFTサイズの設定
+	const vmFFTSize = new Vue({
+		el: '#select-fftsize',
+		data: {
+			fftSize: app.analyser.fftSize,
+			fftSizes: []
+		},
+		watch: {
+			fftSize() {
+				let fftSize = parseInt(this.fftSize);
+		
+				if (fftSize != (fftSize & -fftSize)) {
+					fftSize = 2 ** minLog2FFTSize;
+				}
+				this.fftSize = fftSize.toString();
+				
+				app.changeFFTSize(fftSize);
+				spectrumAnalysis.changeFFTSize(fftSize);
+			}
+		}
+	});
+	const minLog2FFTSize = 5;
+	const maxLog2FFTSize = 15;
+	for (let i=minLog2FFTSize; i<=maxLog2FFTSize; ++i) {
+		vmFFTSize.fftSizes.push(fftSize = 2 ** i);
+	}
+	
 	
 	// メディアデバイス
 	(navigator.mediaDevices || navigator).getUserMedia({
@@ -190,13 +345,21 @@ window.addEventListener('load', e => {
 		app.changeSourceNode(audioSourceNode);
 		
 		// 開始・停止ボタン
-		btnStartStop.addEventListener('click', e => {
-			if (!app.analyzing) {
-				app.startAnalyzing();
-				btnStartStop.textContent = 'Analyzing...';
-			} else {
-				app.stopAnalyzing();
-				btnStartStop.textContent = 'Start';
+		const vmToggleAnalysis = new Vue({
+			el: '#button-start-stop',
+			data: {
+				actionMessage: 'Start'
+			},
+			methods: {
+				toggleAnalysis() {
+					if (!app.analyzing) {
+						app.startAnalyzing();
+						this.actionMessage = 'Analyzing...';
+					} else {
+						app.stopAnalyzing();
+						this.actionMessage = 'Start';
+					}
+				}
 			}
 		});
 	});

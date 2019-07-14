@@ -5,10 +5,31 @@ body {
 	margin: 0;
 }
 
+main {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+}
+
+section.section-entire {
+	flex: 0 0 auto;
+	align-self: flex-start;
+	height: auto;
+	
+	position: -x-sticky;
+	position: -webkit-sticky;
+	position: sticky;
+	top: 0px;
+	margin-top: 0;
+	
+	border-right: 2px solid white;
+	border-bottom: 2px solid white;
+}
+
 section.section-output {
 	background-color: #CC99FF;
 	
-	margin: 2px 0;
+	margin-bottom: 2px;
 	padding: 0.5em;
 	
 	font-size: 1.2em;
@@ -17,15 +38,6 @@ section.section-output {
 	flex-direction: row;
 	flex-wrap: wrap;
 	justify-content: space-between;
-}
-
-section.section-sticky {
-	position: -x-sticky;
-	position: -webkit-sticky;
-	position: sticky;
-	
-	top: 2px;
-	border-bottom: 2px solid white;
 }
 
 section.section-output .output-config {
@@ -43,8 +55,8 @@ section.section-output .output-config .section-heading {
 
 section.section-output .output-config div {
 	margin-left: 1em;
-	margin-top: 2px;
-	margin-bottom: 2px;
+	margin-top: 4px;
+	margin-bottom: 4px;
 }
 
 section.section-output .output-config label {
@@ -54,7 +66,7 @@ section.section-output .output-config label {
 section.section-output .output-config input,
 section.section-output .output-config button,
 section.section-output .output-config select {
-	margin-left: 0.5em;
+	margin-left: 1.0em;
 	
 	font-size: inherit;
 	font-family: inherit;
@@ -63,13 +75,23 @@ section.section-output .output-config select {
 	background-color: #E6CCFF;
 }
 
+section.section-output .output-config output {
+	display: inline-block;
+	
+	color: initial;
+	margin-left: 1.0em;
+	
+	font-size: inherit;
+	font-family: inherit;
+}
+
 section.section-output .output-config button.remarkable {
 	background-color: #FFFF87;
 }
 
 
 section.section-output .output-config input {
-	width: 4em;
+	width: 5em;
 }
 
 section.section-output .output-config button {

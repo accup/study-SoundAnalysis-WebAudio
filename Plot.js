@@ -44,6 +44,137 @@ let BaselineAnchorSelector = {
 };
 
 
+class ColorBar {
+	/**
+	 * 
+	 * @param {number} value 
+	 */
+	static convertValueToHex(value) {
+		value = Math.max(0, Math.min(Math.floor(value), 255));
+		let hexString = value.toString(16).toUpperCase();
+		
+		if (hexString.length < 2) {
+			return '0' + hexString;
+		} else {
+			return hexString;
+		}
+	}
+	
+	/**
+	 * 
+	 * @param {number} alpha 
+	 */
+	getRgbValue(alpha) {
+		// alpha = Math.max(0.0, Math.min(alpha, 1.0));
+		return {r: 0, g: 0, b: 0};
+	}
+	
+	/** #RRGGBB 形式で出力する
+	 * 
+	 * @param {number} alpha [0.0, 1.0] のアルファ値
+	 */
+	hex(alpha) {
+		let rgbValue = this.getRgbValue(alpha);
+		return `#${ColorBar.convertValueToHex(rgbValue.r)}${ColorBar.convertValueToHex(rgbValue.g)}${ColorBar.convertValueToHex(rgbValue.b)}`;
+	}
+	
+	/** rgb(R, G, B) 形式で出力する (0 <= R, G, B <= 255)
+	 * 
+	 * @param {number} alpha [0.0, 1.0] のアルファ値
+	 */
+	rgb(alpha) {
+		let rgbValue = this.getRgbValue(alpha);
+		return `rgb(${rgbValue.r}, ${rgbValue.g}, ${rgbValue.b})`;
+	}
+}
+
+class SectionColorBar extends ColorBar {
+	/**
+	 * 
+	 * @param {[number, number, number, number][]} sections [ステップ値, R, G, B] (0.0 ≦ ステップ値 ≦ 1.0, 0 ≦ R, G, B ≦ 255) の配列
+	 */
+	constructor(sections) {
+		super();
+		
+		if (sections.length < 2)
+			throw new Error('カラーセクションを2つ以上用意してください。');
+		
+		this.sections = sections
+			.map(section => [
+				section[0],
+				Math.max(0, Math.min(section[1], 255)),
+				Math.max(0, Math.min(section[2], 255)),
+				Math.max(0, Math.min(section[3], 255))])
+			.sort(section => section[0]);
+		
+		let minStep = this.sections[0][0];
+		let maxStep = this.sections[this.sections.length - 1][0];
+		
+		this.sections[0][0] = 0.0;
+		this.sections[this.sections.length - 1][0] = 1.0;
+		
+		for (let i=1, n=this.sections.length-1; i<n; ++i) {
+			let normalizedStep = (this.sections[i][0] - minStep) / (maxStep - minStep);
+			this.sections[i][0] = Math.max(0.0, Math.min(normalizedStep, 1.0));
+		}
+	}
+	
+	
+	/**
+	 * 
+	 * @param {number} alpha [0.0, 1.0] のアルファ値
+	 */
+	getLowerIndex(alpha) {
+		let le = 0;
+		let gt = this.sections.length;
+		
+		while (1 < gt - le) {
+			// (le + gt) / 2 の整数安定版
+			let mid = (le + gt) >> 1;
+			
+			if (this.sections[mid][0] <= alpha) {
+				le = mid;
+			} else {
+				gt = mid;
+			}
+		}
+		
+		return le;
+	}
+	
+	/**
+	 * 
+	 * @param {number} alpha 
+	 */
+	getRgbValue(alpha) {
+		alpha = Math.max(0.0, Math.min(alpha, 1.0));
+		let lowerIndex = this.getLowerIndex(alpha);
+		
+		if (lowerIndex == this.sections.length - 1) {
+			return {
+				r: this.sections[lowerIndex][1],
+				g: this.sections[lowerIndex][2],
+				b: this.sections[lowerIndex][3]
+			};
+		}
+		
+		let lowerSection = this.sections[lowerIndex];
+		let upperSection = this.sections[lowerIndex + 1];
+		
+		let ratio = (alpha - lowerSection[0]) / (upperSection[0] - lowerSection[0]);
+		let r = (1.0 - ratio) * lowerSection[1] + ratio * upperSection[1];
+		let g = (1.0 - ratio) * lowerSection[2] + ratio * upperSection[2];
+		let b = (1.0 - ratio) * lowerSection[3] + ratio * upperSection[3];
+		
+		return {
+			r: Math.max(0, Math.min(Math.round(r), 255)),
+			g: Math.max(0, Math.min(Math.round(g), 255)),
+			b: Math.max(0, Math.min(Math.round(b), 255))
+		}
+	}
+}
+
+
 class GraphBase {
 	/**
 	 * @param {HTMLCanvasElement} htmlCanvasElement 
@@ -162,13 +293,16 @@ class SpectrogramGraph extends TimeDomainGraph {
 	constructor(htmlCanvasElement, numFrames) {
 		super(htmlCanvasElement, numFrames);
 		
-		/** 最も出力が大きい時の色
-		 * @type {string | CanvasGradient | CanvasPattern}
+		/** 描画色（カラーバー）
+		 * @type {ColorBar}
 		 */
-		this.fg_color = 'green';
+		this.fg_color = new SectionColorBar([
+			[0.0, 0,   0, 0],
+			[1.0, 0, 255, 0]
+		]);
 		
 		/** 値域を [0, 1] に変換する関数 */
-		this.alphaConverter = AlphaConverters.exponential;
+		this.alphaConverter = AlphaConverters.linear;
 	}
 	
 	/** 新しいフレームのデータを描画
@@ -188,16 +322,16 @@ class SpectrogramGraph extends TimeDomainGraph {
 		this.context.clearRect(left, 0, right - left, cHeight);
 		
 		// 描画スタイル
-		this.context.fillStyle = this.fg_color;
+		this.context.globalAlpha = 1.0;
 		
 		for (let i=0; i<lenSpec; ++i)
 		{
 			let top = (lenSpec - i - 1) * cHeight / lenSpec;
 			let bottom = (lenSpec - i) * cHeight / lenSpec;
 			
-			// 出力値を [0, 1] に変換してアルファ値として設定
+			// 出力値を [0, 1] に変換して描画色を設定
 			let value = spectrum[i];
-			this.context.globalAlpha = this.alphaConverter(value);
+			this.context.fillStyle = this.fg_color.hex(this.alphaConverter(value));
 			
 			// データの描画
 			this.context.fillRect(left, top, right - left, Math.max(1, bottom - top));
@@ -205,6 +339,7 @@ class SpectrogramGraph extends TimeDomainGraph {
 		
 		// 次に描画する位置に線を描画
 		this.context.globalAlpha = 1.0;
+		this.context.fillStyle = this.fg_color.hex(1.0);
 		this.context.fillRect(right, 0, 1, cHeight);
 		
 		this.proceedFrame();
@@ -238,6 +373,16 @@ class TickGraph extends GraphBase {
 		 * @type {CanvasTextBaseline}
 		 */
 		this.baseline = 'middle';
+		
+		/** 最後の描画設定を保持 */
+		this.indices = null;
+		this.labels = null;
+		this.numDivision = null;
+	}
+	
+	changeFont(font) {
+		this.font = font;
+		this.renderTicks(this.indices, this.labels, this.numDivision);
 	}
 	
 	/** 縦にラベルを描画する
@@ -246,6 +391,10 @@ class TickGraph extends GraphBase {
 	 * @param {number} numDivision 軸の分割数
 	 */
 	renderTicks(indices, labels, numDivision) {
+		this.indices = indices;
+		this.labels = labels;
+		this.numDivision = numDivision;
+		
 		const cWidth = this.canvas.width;
 		const cHeight = this.canvas.height;
 		
