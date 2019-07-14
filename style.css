@@ -15,6 +15,7 @@ section.section-output {
 	
 	display: flex;
 	flex-direction: row;
+	flex-wrap: wrap;
 	justify-content: space-between;
 }
 
@@ -79,20 +80,26 @@ section.section-output .output-config button {
 }
 
 section.section-output output {
-	flex: 1 0 auto;
-		
+	flex: 2 0 240px;
+	
 	display: flex;
 	flex-direction: row;
 }
 
 section.section-output output div {
-	flex: 0 0 auto;
+	flex: auto auto auto;
 }
 
 canvas.canvas-tick {
+	display: block;
+	width: 100%;
+	
 	background-color: white;
 }
 
 canvas.canvas-graph {
+	display: block;
+	width: 100%;
+	
 	background-color: black;
 }
