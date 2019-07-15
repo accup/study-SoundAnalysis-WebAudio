@@ -187,7 +187,8 @@ window.addEventListener('load', e => {
 		constructor(computeChroma, cvsGraphId, cvsTickId) {
 			/** @type {Float32Array} */
 			this.chromaBuffer = null;
-			
+			this.invMaxChroma = 0.0;
+
 			this.computeChroma = computeChroma;
 			
 			this.chromaGraph = new SpectrogramGraph(
@@ -211,7 +212,9 @@ window.addEventListener('load', e => {
 		
 		renderAnalyzedData() {
 			this.computeChroma(this.chromaBuffer, app.spectrumBuffer, app.sampleRate, 440 * (2 ** (3 / 12)))
-			
+			let maxChroma = this.chromaBuffer.reduce((acc, val) => Math.max(acc, val));
+			this.invMaxChroma = maxChroma < 1e-7 ? 0.0 : (1.0 / maxChroma)
+
 			this.chromaGraph.renderNextFrame(this.chromaBuffer);
 		}
 	}
@@ -226,7 +229,6 @@ window.addEventListener('load', e => {
 	// カラーマップとフォントの設定
 	const colorBar = new SectionColorBar([
 		[ 0.0,   0,   0,   0],
-		[1e-2,   0,   0, 255],
 		[ 1.0,   0, 255,   0]
 	]);
 	const font = '16px Ubuntu, sans-serif';
@@ -235,11 +237,35 @@ window.addEventListener('load', e => {
 	spectrumAnalysis.freqTick.changeFont(font);
 	
 	// Chroma Analyses
+	let chromaNames = ['chroma1', 'chroma2', 'chroma3']
 	for (let i=0; i<app.analysisCallbacks.length; ++i) {
 		let analysis = app.analysisCallbacks[i];
 		if (analysis instanceof ChromaAnalysis) {
+			let name = chromaNames.shift();
+
 			analysis.chromaGraph.fg_color = colorBar;
 			analysis.chromaTick.changeFont(font);
+			
+			const vmNormalizationEnable = new Vue({
+				el: '#button-' + name + '-normalizationenable',
+				data: {
+					analysis: analysis,
+					enabled: false,
+					actionMessage: 'Disabled'
+				},
+				methods: {
+					action() {
+						this.enabled = !this.enabled;
+						if (this.enabled) {
+							this.actionMessage = 'Enabled';
+							this.analysis.chromaGraph.alphaConverter = chroma => AlphaConverters.linear(chroma * this.analysis.invMaxChroma);
+						} else {
+							this.actionMessage = 'Disabled';
+							this.analysis.chromaGraph.alphaConverter = AlphaConverters.linear;
+						}
+					}
+				}
+			})
 		}
 	}
 	
